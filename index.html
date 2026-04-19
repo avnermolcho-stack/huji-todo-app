@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Task List</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-identity-library-for-js/3.0.0/msal-browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f3f4f6; color: #1f2937; min-height: 100vh; }
+
+    /* LOGIN SCREEN */
+    #login-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; gap: 20px;
+    }
+    #login-screen h1 { font-size: 1.6rem; color: #1e3a5f; }
+    #login-screen p { color: #6b7280; font-size: 0.95rem; }
+    .login-btn {
+      background: #1e3a5f; color: white; border: none; border-radius: 8px;
+      padding: 12px 28px; font-size: 1rem; cursor: pointer; margin-top: 10px;
+    }
+    .login-btn:hover { background: #16304f; }
+
+    /* HEADER */
+    header {
+      background: #1e3a5f; color: white; padding: 18px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size: 1.3rem; font-weight: 600; }
+    header .meta { font-size: 0.82rem; opacity: 0.75; margin-top: 2px; }
+    .header-right { display: flex; gap: 10px; align-items: center; }
+    .sync-btn, .signout-btn {
+      border: 1px solid rgba(255,255,255,0.3); color: white;
+      padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 0.83rem;
+      background: rgba(255,255,255,0.12);
+    }
+    .sync-btn:hover, .signout-btn:hover { background: rgba(255,255,255,0.22); }
+    .spinning { animation: spin 1s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* STATS BAR */
+    .stats {
+      background: white; border-bottom: 1px solid #e5e7eb;
+      padding: 10px 32px; display: flex; gap: 28px;
+      font-size: 0.83rem; color: #6b7280;
+    }
+    .stats span strong { color: #1f2937; }
+
+    /* LAYOUT */
+    .layout { max-width: 900px; margin: 28px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ADD TASK */
+    .add-task {
+      background: white; border-radius: 10px; padding: 16px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; gap: 10px;
+    }
+    .add-task input {
+      flex: 1; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 9px 13px; font-size: 0.92rem; outline: none;
+    }
+    .add-task input:focus { border-color: #1e3a5f; }
+    .add-task button {
+      background: #1e3a5f; color: white; border: none; border-radius: 6px;
+      padding: 9px 18px; font-size: 0.88rem; cursor: pointer; font-weight: 500; white-space: nowrap;
+    }
+    .add-task button:hover { background: #16304f; }
+
+    /* FILTERS */
+    .toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 20px; border: 1px solid #d1d5db;
+      background: white; font-size: 0.82rem; cursor: pointer; color: #6b7280;
+    }
+    .filter-btn.active { background: #1e3a5f; color: white; border-color: #1e3a5f; }
+    .legend { display: flex; gap: 14px; font-size: 0.78rem; color: #6b7280; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+    /* GROUP LABEL */
+    .group-label {
+      font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.6px; color: #9ca3af; margin-bottom: 8px; padding-left: 2px;
+    }
+
+    /* TASK CARD */
+    .task-card {
+      background: white; border-radius: 10px; padding: 14px 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; align-items: flex-start;
+      gap: 13px; margin-bottom: 8px; border-left: 3px solid transparent; transition: box-shadow 0.15s;
+    }
+    .task-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+    .task-card.from-email { border-left-color: #3b82f6; }
+    .task-card.manual { border-left-color: #8b5cf6; }
+    .task-card.done { opacity: 0.55; }
+
+    .task-check {
+      width: 21px; height: 21px; border-radius: 50%; border: 2px solid #d1d5db;
+      flex-shrink: 0; margin-top: 1px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; transition: all 0.15s; font-size: 11px;
+    }
+    .task-check.checked { background: #10b981; border-color: #10b981; color: white; }
+    .task-check:hover:not(.checked) { border-color: #10b981; }
+
+    .task-body { flex: 1; }
+    .task-text { font-size: 0.93rem; line-height: 1.45; color: #1f2937; }
+    .task-text.done-text { text-decoration: line-through; color: #9ca3af; }
+
+    .task-meta { display: flex; gap: 8px; margin-top: 5px; align-items: center; flex-wrap: wrap; }
+    .badge { font-size: 0.73rem; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+    .badge-email { background: #dbeafe; color: #1d4ed8; }
+    .badge-manual { background: #ede9fe; color: #6d28d9; }
+    .task-source { font-size: 0.75rem; color: #9ca3af; }
+    .done-time { font-size: 0.75rem; color: #9ca3af; }
+
+    .delete-btn {
+      background: none; border: none; color: #d1d5db; cursor: pointer;
+      font-size: 1rem; padding: 2px 6px; border-radius: 4px; opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .task-card:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { color: #ef4444; background: #fee2e2; }
+
+    /* EMPTY STATE */
+    .empty { text-align: center; padding: 48px; color: #9ca3af; font-size: 0.92rem; background: white; border-radius: 10px; }
+
+    /* TOAST */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1e3a5f; color: white; padding: 10px 22px; border-radius: 8px;
+      font-size: 0.88rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <h1>📋 My Task List</h1>
+  <p>Sign in with your Microsoft account to access your tasks.</p>
+  <button class="login-btn" onclick="signIn()">Sign in with Microsoft</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="hidden">
+  <header>
+    <div>
+      <h1>📋 My Task List</h1>
+      <div class="meta" id="sync-label">Loading…</div>
+    </div>
+    <div class="header-right">
+      <button class="sync-btn" onclick="syncNow()">↻ Sync Now</button>
+      <button class="signout-btn" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <div class="stats">
+    <span><strong id="stat-open">0</strong> open tasks</span>
+    <span><strong id="stat-done">0</strong> completed</span>
+    <span><strong id="stat-email">0</strong> from Outlook · <strong id="stat-manual">0</strong> manual</span>
+  </div>
+
+  <div class="layout">
+    <div class="add-task">
+      <input type="text" id="new-task-input" placeholder="Add a manual task…" onkeydown="if(event.key==='Enter') addManualTask()" />
+      <button onclick="addManualTask()">+ Add</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="filters">
+        <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+        <button class="filter-btn" onclick="setFilter('open', this)">Open</button>
+        <button class="filter-btn" onclick="setFilter('done', this)">Completed</button>
+        <button class="filter-btn" onclick="setFilter('email', this)">From Outlook</button>
+        <button class="filter-btn" onclick="setFilter('manual', this)">Manual</button>
+      </div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:#3b82f6"></span>From Outlook</span>
+        <span><span class="legend-dot" style="background:#8b5cf6"></span>Manual</span>
+      </div>
+    </div>
+
+    <div id="open-group">
+      <div class="group-label" id="open-label">Open</div>
+      <div id="open-tasks"></div>
+    </div>
+
+    <div id="done-group">
+      <div class="group-label" id="done-label">Completed</div>
+      <div id="done-tasks"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const CLIENT_ID   = 'df475ecc-ac80-4c82-b6d3-22eab3cd7a60';
+const TENANT_ID   = '5f69a649-cb4d-451f-9941-61e8f7b564c7';
+const ONEDRIVE_FILE = 'Claude/tasks.json'; // path inside OneDrive root
+
+const msalConfig = {
+  auth: {
+    clientId: CLIENT_ID,
+    authority: `https://login.microsoftonline.com/common`,
+    redirectUri: window.location.origin + window.location.pathname
+  },
+  cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+};
+
+const loginRequest = {
+  scopes: ['Files.ReadWrite', 'Mail.Read', 'User.Read']
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let tasks = [];       // { id, text, done, doneAt, source, emailId, emailSubject, emailDate, createdAt }
+let currentFilter = 'all';
+let lastSynced = null;
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+async function init() {
+  await msalInstance.initialize();
+  const response = await msalInstance.handleRedirectPromise();
+  if (response) setActiveAccount(response.account);
+  const accounts = msalInstance.getAllAccounts();
+  if (accounts.length > 0) {
+    msalInstance.setActiveAccount(accounts[0]);
+    showApp();
+    await loadTasks();
+  }
+}
+
+function setActiveAccount(account) {
+  if (account) msalInstance.setActiveAccount(account);
+}
+
+async function signIn() {
+  try {
+    const res = await msalInstance.loginPopup(loginRequest);
+    setActiveAccount(res.account);
+    showApp();
+    await loadTasks();
+  } catch(e) { console.error(e); }
+}
+
+function signOut() {
+  msalInstance.logoutPopup();
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+}
+
+function showApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+}
+
+async function getToken() {
+  const account = msalInstance.getActiveAccount();
+  const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
+  return res.accessToken;
+}
+
+// ─── ONEDRIVE ─────────────────────────────────────────────────────────────────
+async function loadTasks() {
+  try {
+    const token = await getToken();
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_FILE}:/content`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (res.status === 404) {
+      tasks = [];
+    } else if (res.ok) {
+      const data = await res.json();
+      tasks = data.tasks || [];
+      lastSynced = data.lastSynced || null;
+    }
+    updateSyncLabel();
+    render();
+  } catch(e) {
+    console.error('Load error:', e);
+    showToast('Could not load tasks. Check your connection.');
+  }
+}
+
+async function saveTasks() {
+  try {
+    const token = await getToken();
+    const body = JSON.stringify({ tasks, lastSynced });
+    await fetch(
+      `https://graph.microsoft.com/v1.0/me/drive/root:/${ONEDRIVE_FILE}:/content`,
+      { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body }
+    );
+  } catch(e) {
+    console.error('Save error:', e);
+    showToast('Could not save tasks.');
+  }
+}
+
+// ─── SYNC WITH OUTLOOK ────────────────────────────────────────────────────────
+async function syncNow() {
+  const btn = document.querySelector('.sync-btn');
+  btn.innerHTML = '<span class="spinning">↻</span> Syncing…';
+  btn.disabled = true;
+  try {
+    const token = await getToken();
+
+    // Fetch flagged emails
+    const res = await fetch(
+      `https://graph.microsoft.com/v1.0/me/messages?$filter=flag/flagStatus eq 'flagged'&$select=id,subject,from,receivedDateTime,body&$top=50`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await res.json();
+    const flaggedEmails = data.value || [];
+
+    // Find already-processed email IDs
+    const processedIds = new Set(tasks.filter(t => t.emailId).map(t => t.emailId));
+    const newEmails = flaggedEmails.filter(e => !processedIds.has(e.id));
+
+    if (newEmails.length === 0) {
+      lastSynced = new Date().toISOString();
+      updateSyncLabel();
+      showToast('Already up to date — no new flagged emails.');
+      await saveTasks();
+      return;
+    }
+
+    // Extract tasks from each new email using a simple heuristic
+    // (In production this is handled by the Cowork scheduled task with full Claude AI)
+    for (const email of newEmails) {
+      const bodyText = email.body?.content?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() || '';
+      const subject = email.subject || '';
+      const from = email.from?.emailAddress?.name || email.from?.emailAddress?.address || '';
+      const date = email.receivedDateTime ? new Date(email.receivedDateTime).toLocaleDateString('en-GB') : '';
+
+      // Create one task per email (AI extraction handled by scheduled task)
+      tasks.push({
+        id: crypto.randomUUID(),
+        text: `[From ${from}] ${subject}`,
+        done: false,
+        doneAt: null,
+        source: 'email',
+        emailId: email.id,
+        emailSubject: subject,
+        emailFrom: from,
+        emailDate: date,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    lastSynced = new Date().toISOString();
+    updateSyncLabel();
+    await saveTasks();
+    render();
+    showToast(`Added ${newEmails.length} task${newEmails.length > 1 ? 's' : ''} from Outlook`);
+  } catch(e) {
+    console.error('Sync error:', e);
+    showToast('Sync failed. Please try again.');
+  } finally {
+    btn.innerHTML = '↻ Sync Now';
+    btn.disabled = false;
+  }
+}
+
+// ─── TASK OPERATIONS ──────────────────────────────────────────────────────────
+async function addManualTask() {
+  const input = document.getElementById('new-task-input');
+  const text = input.value.trim();
+  if (!text) return;
+  tasks.push({
+    id: crypto.randomUUID(),
+    text,
+    done: false,
+    doneAt: null,
+    source: 'manual',
+    emailId: null,
+    createdAt: new Date().toISOString()
+  });
+  input.value = '';
+  render();
+  await saveTasks();
+}
+
+async function toggleDone(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  task.done = !task.done;
+  task.doneAt = task.done ? new Date().toISOString() : null;
+  render();
+  await saveTasks();
+}
+
+async function deleteTask(id) {
+  tasks = tasks.filter(t => t.id !== id);
+  render();
+  await saveTasks();
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function render() {
+  let filtered = tasks;
+  if (currentFilter === 'open')   filtered = tasks.filter(t => !t.done);
+  if (currentFilter === 'done')   filtered = tasks.filter(t => t.done);
+  if (currentFilter === 'email')  filtered = tasks.filter(t => t.source === 'email');
+  if (currentFilter === 'manual') filtered = tasks.filter(t => t.source === 'manual');
+
+  const open = filtered.filter(t => !t.done);
+  const done = filtered.filter(t => t.done).sort((a,b) => new Date(b.doneAt) - new Date(a.doneAt));
+
+  document.getElementById('open-label').textContent = `Open (${open.length})`;
+  document.getElementById('done-label').textContent = `Completed (${done.length})`;
+
+  document.getElementById('open-tasks').innerHTML = open.length
+    ? open.map(taskHTML).join('')
+    : `<div class="empty">No open tasks${currentFilter !== 'all' ? ' in this filter' : ''} 🎉</div>`;
+
+  document.getElementById('done-tasks').innerHTML = done.length
+    ? done.map(taskHTML).join('')
+    : `<div class="empty" style="padding:20px">No completed tasks yet.</div>`;
+
+  // Stats (always from full list)
+  const allOpen   = tasks.filter(t => !t.done);
+  const allDone   = tasks.filter(t => t.done);
+  const allEmail  = tasks.filter(t => t.source === 'email');
+  const allManual = tasks.filter(t => t.source === 'manual');
+  document.getElementById('stat-open').textContent   = allOpen.length;
+  document.getElementById('stat-done').textContent   = allDone.length;
+  document.getElementById('stat-email').textContent  = allEmail.length;
+  document.getElementById('stat-manual').textContent = allManual.length;
+
+  // Show/hide done group
+  const showDone = currentFilter !== 'open';
+  document.getElementById('done-group').style.display = showDone ? '' : 'none';
+  const showOpen = currentFilter !== 'done';
+  document.getElementById('open-group').style.display = showOpen ? '' : 'none';
+}
+
+function taskHTML(task) {
+  const checkClass = task.done ? 'task-check checked' : 'task-check';
+  const checkInner = task.done ? '✓' : '';
+  const textClass  = task.done ? 'task-text done-text' : 'task-text';
+  const cardClass  = `task-card ${task.source === 'email' ? 'from-email' : 'manual'}${task.done ? ' done' : ''}`;
+  const badge      = task.source === 'email'
+    ? `<span class="badge badge-email">From Outlook</span>`
+    : `<span class="badge badge-manual">Manual</span>`;
+  const source = task.source === 'email' && task.emailSubject
+    ? `<span class="task-source">${escHtml(task.emailFrom || '')}${task.emailDate ? ' · ' + task.emailDate : ''}</span>`
+    : '';
+  const doneTime = task.done && task.doneAt
+    ? `<span class="done-time">✓ Completed ${formatDateTime(task.doneAt)}</span>`
+    : '';
+  return `
+    <div class="${cardClass}">
+      <div class="${checkClass}" onclick="toggleDone('${task.id}')">${checkInner}</div>
+      <div class="task-body">
+        <div class="${textClass}">${escHtml(task.text)}</div>
+        <div class="task-meta">${badge}${source}${doneTime}</div>
+      </div>
+      <button class="delete-btn" onclick="deleteTask('${task.id}')" title="Delete">✕</button>
+    </div>`;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })
+    + ' at ' + d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+
+function updateSyncLabel() {
+  const el = document.getElementById('sync-label');
+  el.textContent = lastSynced
+    ? `Last synced: ${formatDateTime(lastSynced)}`
+    : 'Not yet synced with Outlook';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
