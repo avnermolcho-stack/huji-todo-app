@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>My Task List</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-identity-library-for-js/3.0.0/msal-browser.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f3f4f6; color: #1f2937; min-height: 100vh; }
@@ -143,6 +143,7 @@
   <h1>📋 My Task List</h1>
   <p>Sign in with your Microsoft account to access your tasks.</p>
   <button class="login-btn" onclick="signIn()">Sign in with Microsoft</button>
+  <p id="login-error" style="color:#ef4444;font-size:0.85rem;max-width:360px;text-align:center;margin-top:8px;display:none;"></p>
 </div>
 
 <!-- MAIN APP -->
@@ -242,12 +243,24 @@ function setActiveAccount(account) {
 }
 
 async function signIn() {
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
   try {
     const res = await msalInstance.loginPopup(loginRequest);
     setActiveAccount(res.account);
     showApp();
     await loadTasks();
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    console.error(e);
+    if (e.errorCode === 'popup_window_error' || e.message?.includes('popup')) {
+      errEl.textContent = 'Popup was blocked. Please allow popups for this site in your browser and try again.';
+    } else if (e.errorCode === 'user_cancelled') {
+      errEl.textContent = 'Sign-in was cancelled.';
+    } else {
+      errEl.textContent = 'Sign-in failed: ' + (e.message || e.errorCode || 'Unknown error');
+    }
+    errEl.style.display = 'block';
+  }
 }
 
 function signOut() {
